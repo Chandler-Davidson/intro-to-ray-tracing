@@ -9,7 +9,8 @@ mod sphere;
 mod vec3;
 
 use std::io;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::thread;
 
 use camera::Camera;
 use color::Color;
@@ -60,10 +61,10 @@ fn main() {
     // World
     let r = f64::cos(common::PI / 4.0);
     let mut world = HittableList::new();
-    let material_ground = Rc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
-    let material_matte = Rc::new(Lambertian::new(Color::new(0.1, 0.2, 0.5)));
-    let material_glass = Rc::new(Dielectric::new(1.5));
-    let material_metal = Rc::new(Metal::new(Color::new(0.8, 0.6, 0.2), 0.0));
+    let material_ground = Arc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
+    let material_matte = Arc::new(Lambertian::new(Color::new(0.1, 0.2, 0.5)));
+    let material_glass = Arc::new(Dielectric::new(1.5));
+    let material_metal = Arc::new(Metal::new(Color::new(0.8, 0.6, 0.2), 0.0));
 
     world.add(Box::new(Sphere::new(
         Point3::new(0.0, -100.5, -1.0),
@@ -92,27 +93,50 @@ fn main() {
     )));
 
     // Camera
-    let cam = Camera::new(
+    let cam = Arc::new(Camera::new(
         Point3::new(-2.0, 2.0, 1.0),
         Point3::new(0.0, 0.0, -1.0),
         Vec3::new(0.0, 1.0, 0.0),
         20.0,
         ASPECT_RATIO,
-    );
-    // Render
+    ));
+    let world = Arc::new(world);
 
+    // Render
     print!("P3\n{} {}\n255\n", IMAGE_WIDTH, IMAGE_HEIGHT);
 
+    let handles: Vec<thread::JoinHandle<(i32, Vec<Color>)>> = (0..IMAGE_HEIGHT)
+        .rev()
+        .map(|j| {
+            let world = Arc::clone(&world);
+            let cam = Arc::clone(&cam);
+            thread::spawn(move || {
+                let mut row = Vec::with_capacity(IMAGE_WIDTH as usize);
+                for i in 0..IMAGE_WIDTH {
+                    let mut pixel_color = color::black();
+                    for _ in 0..SAMPLES_PER_PIXEL {
+                        let u = (i as f64 + common::random_double()) / (IMAGE_WIDTH - 1) as f64;
+                        let v = (j as f64 + common::random_double()) / (IMAGE_HEIGHT - 1) as f64;
+                        let r = cam.get_ray(u, v);
+                        pixel_color += ray_color(&r, world.as_ref(), MAX_DEPTH);
+                    }
+                    row.push(pixel_color);
+                }
+                (j, row)
+            })
+        })
+        .collect();
+
+    let mut rows: Vec<Vec<Color>> = (0..IMAGE_HEIGHT as usize).map(|_| Vec::new()).collect();
+    let total = handles.len();
+    for (completed, handle) in handles.into_iter().enumerate() {
+        let (j, row) = handle.join().unwrap();
+        eprint!("\rScanlines remaining: {} ", total - completed - 1);
+        rows[j as usize] = row;
+    }
+
     for j in (0..IMAGE_HEIGHT).rev() {
-        eprint!("\rScanlines remaining: {} ", j);
-        for i in 0..IMAGE_WIDTH {
-            let mut pixel_color = color::black();
-            for _ in 0..SAMPLES_PER_PIXEL {
-                let u = (i as f64 + common::random_double()) / (IMAGE_WIDTH - 1) as f64;
-                let v = (j as f64 + common::random_double()) / (IMAGE_HEIGHT - 1) as f64;
-                let r = cam.get_ray(u, v);
-                pixel_color += ray_color(&r, &world, MAX_DEPTH);
-            }
+        for &pixel_color in &rows[j as usize] {
             color::write_color(&mut io::stdout(), pixel_color, SAMPLES_PER_PIXEL);
         }
     }
