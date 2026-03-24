@@ -106,13 +106,14 @@ try {
         throw "Branch '$Branch' was not found."
     }
 
-    $commits = @(git rev-list --reverse $Branch)
+    # Only include commits that touched Rust source files.
+    $commits = @(git rev-list --reverse $Branch -- ":(glob)**/*.rs")
     if ($MaxCommits -gt 0) {
         $commits = @($commits | Select-Object -First $MaxCommits)
     }
 
     if (-not $commits -or $commits.Count -eq 0) {
-        throw "No commits were found for branch '$Branch'."
+        throw "No commits with Rust file changes were found for branch '$Branch'."
     }
 
     $absOutputDir = Join-Path $repoRoot $OutputDir
