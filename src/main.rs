@@ -18,7 +18,7 @@ use hittable_list::HittableList;
 use material::{Dielectric, Lambertian, Metal};
 use ray::Ray;
 use sphere::Sphere;
-use vec3::Point3;
+use vec3::{Point3, Vec3};
 
 fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32) -> Color {
     // If we've exceeded the ray bounce limit, no more light is gathered
@@ -58,6 +58,7 @@ fn main() {
     const MAX_DEPTH: i32 = 50;
 
     // World
+    let r = f64::cos(common::PI / 4.0);
     let mut world = HittableList::new();
     let material_ground = Rc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
     let material_matte = Rc::new(Lambertian::new(Color::new(0.1, 0.2, 0.5)));
@@ -91,8 +92,13 @@ fn main() {
     )));
 
     // Camera
-    let cam = Camera::new();
-
+    let cam = Camera::new(
+        Point3::new(-2.0, 2.0, 1.0),
+        Point3::new(0.0, 0.0, -1.0),
+        Vec3::new(0.0, 1.0, 0.0),
+        20.0,
+        ASPECT_RATIO,
+    );
     // Render
 
     print!("P3\n{} {}\n255\n", IMAGE_WIDTH, IMAGE_HEIGHT);
