@@ -9,7 +9,9 @@ mod sphere;
 mod vec3;
 
 use std::io;
-use std::rc::Rc;
+use std::sync::Arc;
+
+use rayon::prelude::*;
 
 use camera::Camera;
 use color::Color;
@@ -52,18 +54,18 @@ fn main() {
     // Image
 
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
-    const IMAGE_WIDTH: i32 = 400;
+    const IMAGE_WIDTH: i32 = 1920;
     const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-    const SAMPLES_PER_PIXEL: i32 = 100;
-    const MAX_DEPTH: i32 = 50;
+    const SAMPLES_PER_PIXEL: i32 = 500;
+    const MAX_DEPTH: i32 = 100;
 
     // World
     let r = f64::cos(common::PI / 4.0);
     let mut world = HittableList::new();
-    let material_ground = Rc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
-    let material_matte = Rc::new(Lambertian::new(Color::new(0.1, 0.2, 0.5)));
-    let material_glass = Rc::new(Dielectric::new(1.5));
-    let material_metal = Rc::new(Metal::new(Color::new(0.8, 0.6, 0.2), 0.0));
+    let material_ground = Arc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
+    let material_matte = Arc::new(Lambertian::new(Color::new(0.1, 0.2, 0.5)));
+    let material_glass = Arc::new(Dielectric::new(1.5));
+    let material_metal = Arc::new(Metal::new(Color::new(0.8, 0.6, 0.2), 0.0));
 
     world.add(Box::new(Sphere::new(
         Point3::new(0.0, -100.5, -1.0),
@@ -105,14 +107,22 @@ fn main() {
 
     for j in (0..IMAGE_HEIGHT).rev() {
         eprint!("\rScanlines remaining: {} ", j);
-        for i in 0..IMAGE_WIDTH {
-            let mut pixel_color = color::black();
-            for _ in 0..SAMPLES_PER_PIXEL {
-                let u = (i as f64 + common::random_double()) / (IMAGE_WIDTH - 1) as f64;
-                let v = (j as f64 + common::random_double()) / (IMAGE_HEIGHT - 1) as f64;
-                let r = cam.get_ray(u, v);
-                pixel_color += ray_color(&r, &world, MAX_DEPTH);
-            }
+
+        let pixel_colors: Vec<_> = (0..IMAGE_WIDTH)
+            .into_par_iter()
+            .map(|i| {
+                let mut pixel_color = Color::new(0.0, 0.0, 0.0);
+                for _ in 0..SAMPLES_PER_PIXEL {
+                    let u = ((i as f64) + common::random_double()) / (IMAGE_WIDTH - 1) as f64;
+                    let v = ((j as f64) + common::random_double()) / (IMAGE_HEIGHT - 1) as f64;
+                    let r = cam.get_ray(u, v);
+                    pixel_color += ray_color(&r, &world, MAX_DEPTH);
+                }
+                pixel_color
+            })
+            .collect();
+
+        for pixel_color in pixel_colors {
             color::write_color(&mut io::stdout(), pixel_color, SAMPLES_PER_PIXEL);
         }
     }
