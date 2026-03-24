@@ -46,3 +46,15 @@ Commit: 8ae1386
 Commit: ae5f712
 
 ![Metals](images/0010_metals.png)
+
+## Glass
+
+Commit: 9156834
+
+![Glass](images/0012_glass.png)
+
+## Camera positions
+
+Commit: b5e1f68
+
+![Camera positions](images/0013_camera-positions.png)
